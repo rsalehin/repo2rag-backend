@@ -4,3 +4,4 @@ from .vector_store import DenseRetriever
 from .fusion import rrf_fuse
 from .reranker import Reranker
 from .pipeline import RepoRAG
+from .citations import format_citation, format_all_citations
