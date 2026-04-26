@@ -20,3 +20,10 @@ RRF_K = int(os.getenv("RRF_K", 60))
 HYBRID_TOP_K = int(os.getenv("HYBRID_TOP_K", 20))
 RERANK_TOP_N = int(os.getenv("RERANK_TOP_N", 10))
 FINAL_TOP_K = int(os.getenv("FINAL_TOP_K", 5))
+
+# LLM Answer Generation
+LLM_ENABLED = os.getenv("LLM_ENABLED", "false").lower() == "true"
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "claude-3-haiku-20240307")
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", 1024))
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", 0.2))

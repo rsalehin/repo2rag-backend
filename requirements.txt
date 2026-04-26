@@ -18,3 +18,4 @@ pydantic>=2.0.0
 # MCP server (will be added later)
 
 # Optional: LLM generation
+langchain-text-splitters>=0.2.0

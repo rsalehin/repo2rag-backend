@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Repo2RAG – Codebase Q&A</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:'Segoe UI',system-ui,sans-serif; background:#0d1117; color:#c9d1d9; min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:2rem 1rem; }
@@ -30,7 +31,20 @@
   .search-row button:disabled { background:#21262d; color:#484f58; cursor:not-allowed; }
   .topk-select { display:flex; align-items:center; gap:.5rem; color:#8b949e; font-size:.85rem; }
   .topk-select select { background:#0d1117; border:1px solid #30363d; color:#c9d1d9; padding:.3rem .5rem; border-radius:4px; }
-  .result { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:1.25rem; margin-bottom:1rem; }
+  .answer-box { background:#161b22; border:1px solid #58a6ff; border-radius:8px; padding:1.25rem; margin-bottom:1.5rem; }
+  .answer-box h3 { color:#58a6ff; margin-bottom:.75rem; font-size:1rem; }
+  .answer-box .markdown-body { line-height:1.7; color:#e6edf3; }
+  .answer-box .markdown-body strong { color:#ffa657; }
+  .answer-box .markdown-body code { background:#30363d; padding:.1rem .35rem; border-radius:4px; font-family:'Cascadia Code','Fira Code',monospace; font-size:.85rem; color:#7ee787; }
+  .answer-box .markdown-body pre { background:#0d1117; padding:.75rem; border-radius:6px; overflow-x:auto; margin:.5rem 0; }
+  .answer-box .markdown-body pre code { background:none; padding:0; color:#e6edf3; }
+  .answer-box .markdown-body ul, .answer-box .markdown-body ol { padding-left:1.5rem; margin:.5rem 0; }
+  .answer-box .markdown-body li { margin:.25rem 0; }
+  .answer-box .markdown-body em { color:#bc8cff; }
+  .answer-box .markdown-body a.ref-link { color:#58a6ff; text-decoration:none; font-weight:bold; }
+  .answer-box .markdown-body a.ref-link:hover { text-decoration:underline; }
+  .result { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:1.25rem; margin-bottom:1rem; transition:border-color 0.3s, background 0.3s; }
+  .result.highlight { border-color:#58a6ff; background:#1a2332; }
   .result-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:.75rem; flex-wrap:wrap; gap:.5rem; }
   .citation { color:#58a6ff; font-weight:600; font-size:.9rem; word-break:break-all; }
   .scores { display:flex; gap:.5rem; flex-wrap:wrap; }
@@ -50,7 +64,6 @@
   <h1> Repo2RAG</h1>
   <p class="subtitle">AI‑Optimized Codebase Q&A — Hybrid RAG + Cross‑Encoder Reranking</p>
 
-  <!-- Upload card -->
   <div class="card">
     <h2>1. Upload Markdown Codebase</h2>
     <div class="upload-zone" id="uploadZone">
@@ -63,7 +76,6 @@
     <div class="ingest-status" id="ingestStatus"></div>
   </div>
 
-  <!-- Search card -->
   <div class="card">
     <h2>2. Ask a Question</h2>
     <div class="search-row">
@@ -75,7 +87,6 @@
     </div>
   </div>
 
-  <!-- Results -->
   <div id="resultsArea">
     <div class="empty-state">Upload a Markdown file to start asking questions</div>
   </div>
@@ -93,7 +104,6 @@ const resultsArea = document.getElementById('resultsArea');
 
 let uploaded = false;
 
-// Upload zone events
 uploadZone.addEventListener('click', ()=> fileInput.click());
 uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
 uploadZone.addEventListener('dragleave', ()=> uploadZone.classList.remove('drag-over'));
@@ -122,7 +132,7 @@ async function handleFile(file) {
     const res = await fetch('/ingest', { method:'POST', body:form });
     const data = await res.json();
     if(res.ok) {
-      showStatus(` Ingested – ${data.chunks} chunks ready`, 'success');
+      showStatus(' Ingested – ' + data.chunks + ' chunks ready', 'success');
       uploaded = true;
       queryInput.disabled = false;
       searchBtn.disabled = false;
@@ -140,7 +150,6 @@ function showStatus(msg, type) {
   ingestStatus.className = 'ingest-status ' + type;
 }
 
-// Search
 searchBtn.addEventListener('click', doSearch);
 queryInput.addEventListener('keydown', e => { if(e.key==='Enter') doSearch(); });
 
@@ -154,31 +163,61 @@ async function doSearch() {
   try {
     const res = await fetch(`/search?q=${encodeURIComponent(q)}&top_k=${topK}`);
     const data = await res.json();
-    renderResults(data.results, data.query);
+    renderResults(data);
   } catch(err) {
     resultsArea.innerHTML = '<div class="empty-state" style="color:#f85149;">Search failed</div>';
   }
 }
 
-function renderResults(results, query) {
-  if(!results.length) {
-    resultsArea.innerHTML = '<div class="empty-state">No results found</div>';
-    return;
+function renderResults(data) {
+  const { answer, results } = data;
+  let html = '';
+
+  // Show generated answer with linked references
+  if (answer && answer.trim()) {
+    let answerHtml = marked.parse(answer);
+    // Replace [1], [2], ... with links to result IDs
+    answerHtml = answerHtml.replace(/\[(\d+)\]/g, (match, num) => {
+      const idx = parseInt(num) - 1;
+      if (idx >= 0 && idx < results.length) {
+        return `<a href="#result-${idx}" class="ref-link" onclick="highlightResult(${idx}); return false;" title="Jump to source ${num}">[${num}]</a>`;
+      }
+      return match; // keep as plain text if out of range
+    });
+    html += `<div class="answer-box"><h3> AI Answer</h3><div class="markdown-body">${answerHtml}</div></div>`;
   }
-  resultsArea.innerHTML = results.map((r,i) => `
-    <div class="result">
-      <div class="result-header">
-        <div class="citation">${escapeHtml(r.citation)}</div>
-        <div class="scores">
-          <span class="badge rerank">Rerank ${r.rerank_score.toFixed(3)}</span>
-          <span class="badge rrf">RRF ${r.rrf_score.toFixed(4)}</span>
-          <span class="badge dense">Dense ${r.dense_score.toFixed(3)}</span>
-          <span class="badge bm25">BM25 ${r.bm25_score.toFixed(3)}</span>
+
+  if (!results.length) {
+    html += '<div class="empty-state">No results found</div>';
+  } else {
+    html += results.map((r, i) => `
+      <div id="result-${i}" class="result">
+        <div class="result-header">
+          <div class="citation">${escapeHtml(r.citation)} <span style="color:#8b949e; font-size:0.75rem;">[Source ${i+1}]</span></div>
+          <div class="scores">
+            <span class="badge rerank">Rerank ${r.rerank_score.toFixed(3)}</span>
+            <span class="badge rrf">RRF ${r.rrf_score.toFixed(4)}</span>
+            <span class="badge dense">Dense ${r.dense_score.toFixed(3)}</span>
+            <span class="badge bm25">BM25 ${r.bm25_score.toFixed(3)}</span>
+          </div>
         </div>
+        <div class="content">${escapeHtml(r.content)}</div>
       </div>
-      <div class="content">${escapeHtml(r.content)}</div>
-    </div>
-  `).join('');
+    `).join('');
+  }
+  resultsArea.innerHTML = html;
+}
+
+// Highlight and scroll to a result
+function highlightResult(idx) {
+  const el = document.getElementById('result-' + idx);
+  if (!el) return;
+  // Remove previous highlights
+  document.querySelectorAll('.result.highlight').forEach(r => r.classList.remove('highlight'));
+  el.classList.add('highlight');
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // Remove highlight after a few seconds
+  setTimeout(() => el.classList.remove('highlight'), 3000);
 }
 
 function escapeHtml(s) {
