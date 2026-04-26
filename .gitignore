@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+.env
+*.egg-info/
+dist/
+build/
+# ChromaDB & BM25 data
+data/chroma/
+data/bm25/
+# IDE
+.vscode/
+.idea/
+# OS
+.DS_Store
+Thumbs.db
